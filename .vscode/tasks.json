@@ -1,0 +1,13 @@
+{
+    // See https://go.microsoft.com/fwlink/?LinkId=733558
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "Open index.php in browser",
+            "type": "shell",
+            "command": "start http://localhost/index.php",
+            "group": "build",
+            "problemMatcher": []
+        }
+    ]
+}

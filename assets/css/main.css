@@ -1,0 +1,52 @@
+/* Consistent styles for all pages */
+body {
+    background: #f4f8fb;
+    font-family: 'Segoe UI', Arial, sans-serif;
+    margin: 0;
+    padding: 0;
+}
+.registration-container {
+    max-width: 400px;
+    margin: 48px auto;
+    padding: 24px 32px 24px 32px;
+    background: #fff;
+    border-radius: 10px;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+}
+.registration-container h1,
+.registration-container h2 {
+    text-align: center;
+    color: #007bff;
+    margin-bottom: 18px;
+    font-weight: 600;
+}
+.registration-container p,
+.registration-container ul {
+    color: #333;
+    font-size: 1.05em;
+}
+.registration-container ul {
+    margin: 24px 0 24px 18px;
+    line-height: 2;
+}
+.registration-container li {
+    margin-bottom: 4px;
+}
+.registration-container .message {
+    margin-bottom: 16px;
+    padding: 10px;
+    background: #f4f8ff;
+    color: #007bff;
+    border: 1px solid #b6d4fe;
+    border-radius: 4px;
+    text-align: center;
+}
+.registration-container img {
+    margin-top: 8px;
+}
+@media (max-width: 600px) {
+    .registration-container {
+        max-width: 98vw;
+        padding: 16px 4vw;
+    }
+}
