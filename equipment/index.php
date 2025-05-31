@@ -32,8 +32,13 @@ if (isset($_POST['add_equipment'])) {
     $status = $_POST['status'];
     $condition = $_POST['condition'];
     $facility_id = !empty($_POST['facility_id']) ? (int)$_POST['facility_id'] : null;
-    $stmt = $conn->prepare("INSERT INTO equipment (name, type, status, `condition`, facility_id) VALUES (?, ?, ?, ?, ?)");
-    $stmt->bind_param('ssssi', $name, $type, $status, $condition, $facility_id);
+    if ($facility_id === null) {
+        $stmt = $conn->prepare("INSERT INTO equipment (name, type, status, `condition`, facility_id) VALUES (?, ?, ?, ?, NULL)");
+        $stmt->bind_param('ssss', $name, $type, $status, $condition);
+    } else {
+        $stmt = $conn->prepare("INSERT INTO equipment (name, type, status, `condition`, facility_id) VALUES (?, ?, ?, ?, ?)");
+        $stmt->bind_param('ssssi', $name, $type, $status, $condition, $facility_id);
+    }
     $stmt->execute();
     log_action($_SESSION['user_id'], 'add_equipment', $name . ' (' . $type . ')');
     header('Location: index.php'); exit;
@@ -55,13 +60,18 @@ if ($is_admin && isset($_POST['equipment_action']) && isset($_POST['equipment_id
     $new_status = ($action === 'check_out') ? 'in use' : 'available';
     $new_condition = $_POST['new_condition'] ?? null;
     if ($action === 'check_out' || $action === 'check_in') {
-        // Update equipment status and condition
-        $stmt = $conn->prepare("UPDATE equipment SET status=?, `condition`=? WHERE equipment_id=?");
-        $stmt->bind_param('ssi', $new_status, $new_condition, $equipment_id);
+        if ($new_condition === null) {
+            $stmt = $conn->prepare("UPDATE equipment SET status=? WHERE equipment_id=?");
+            $stmt->bind_param('si', $new_status, $equipment_id);
+        } else {
+            $stmt = $conn->prepare("UPDATE equipment SET status=?, `condition`=? WHERE equipment_id=?");
+            $stmt->bind_param('ssi', $new_status, $new_condition, $equipment_id);
+        }
         $stmt->execute();
         // Log in equipment_history
         $stmt = $conn->prepare("INSERT INTO equipment_history (equipment_id, action, `condition`, handled_by) VALUES (?, ?, ?, ?)");
-        $stmt->bind_param('issi', $equipment_id, $action === 'check_out' ? 'checked out' : 'checked in', $new_condition, $handled_by);
+        $action_str = ($action === 'check_out') ? 'checked out' : 'checked in';
+        $stmt->bind_param('issi', $equipment_id, $action_str, $new_condition, $handled_by);
         $stmt->execute();
         log_action($_SESSION['user_id'], $action, 'equipment_id: ' . $equipment_id);
         header('Location: index.php'); exit;
@@ -261,13 +271,13 @@ if ($facilitiesList) {
                 <td>
                     <?php
                     $cond = $row['condition'];
-                    $condClass = [
+                    $condClass = array(
                         'good' => 'success',
-                        'damaged' => 'danger',
-                        'needs repair' => 'warning',
-                    ];
+                        'damaged' => 'danger'
+                    );
+                    $condClass['needs repair'] = 'warning';
                     ?>
-                    <span class="badge bg-<?php echo $condClass[$cond] ?? 'light'; ?> badge-condition">
+                    <span class="badge bg-<?php echo isset($condClass[$cond]) ? $condClass[$cond] : 'light'; ?> badge-condition">
                         <?php echo ucfirst($cond); ?>
                     </span>
                 </td>
@@ -279,7 +289,7 @@ if ($facilitiesList) {
                         <select name="new_condition" class="form-select form-select-sm w-auto" required title="Set condition">
                             <option value="good" <?php if($row['condition']==='good')echo'selected';?>>Good</option>
                             <option value="damaged" <?php if($row['condition']==='damaged')echo'selected';?>>Damaged</option>
-                            <option value="needs repair" <?php if($row['condition]==='needs repair')echo'selected';?>>Needs Repair</option>
+                            <option value="needs repair" <?php if($row['condition']==='needs repair')echo'selected';?>>Needs Repair</option>
                         </select>
                         <?php if ($row['status'] === 'available'): ?>
                             <button type="submit" name="equipment_action" value="check_out" class="btn btn-success btn-sm w-100 btn-action" data-bs-toggle="tooltip" data-bs-title="Check Out this equipment"><i class="bi bi-box-arrow-up-right"></i> Check Out</button>
