@@ -1,6 +1,50 @@
 <?php
+// AJAX endpoint for available time slots (returns only future slots for today, all for future dates)
+if (isset($_GET['facility_id']) && isset($_GET['date'])) {
+    require_once '../includes/db.php';
+    $facility_id = (int)$_GET['facility_id'];
+    $date = $_GET['date'];
+    $slots = [];
+    // Use server timezone for correct slot filtering
+    $now = new DateTime('now');
+    $today = $now->format('Y-m-d');
+    $currentHour = (int)$now->format('H');
+    for ($h = 6; $h <= 22; $h++) {
+        if ($date === $today && $h <= $currentHour) continue;
+        $slots[] = sprintf('%02d:00', $h);
+    }
+    $stmt = $conn->prepare("SELECT capacity FROM facilities WHERE facility_id=?");
+    $stmt->bind_param('i', $facility_id);
+    $stmt->execute();
+    $stmt->bind_result($capacity);
+    $stmt->fetch();
+    $stmt->close();
+    $stmt = $conn->prepare("SELECT booking_time FROM bookings WHERE facility_id=? AND DATE(booking_time)=?");
+    $stmt->bind_param('is', $facility_id, $date);
+    $stmt->execute();
+    $result = $stmt->get_result();
+    $booked = [];
+    while ($row = $result->fetch_assoc()) {
+        $time = date('H:00', strtotime($row['booking_time']));
+        if (!isset($booked[$time])) $booked[$time] = 0;
+        $booked[$time]++;
+    }
+    $stmt->close();
+    $available = [];
+    foreach ($slots as $slot) {
+        if (!isset($booked[$slot]) || $booked[$slot] < $capacity) {
+            $available[] = $slot;
+        }
+    }
+    header('Content-Type: application/json');
+    echo json_encode($available);
+    exit;
+}
+
 // Booking module entry point
 require_once '../includes/db.php';
+require_once '../includes/auth.php';
+session_start();
 
 // Fetch all facilities
 $facilities = $conn->query("SELECT * FROM facilities");
@@ -30,29 +74,51 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['book_facility'])) {
     $time = $_POST['time'];
     $duration = 60; // 1 hour slots
     $booking_time = $date . ' ' . $time . ':00';
-    $player_id = 1; // TODO: Replace with session user id
-    // Check if facility is under maintenance
-    if (isset($maintenance[$facility_id])) {
-        $booking_message = 'This facility is under maintenance and cannot be booked.';
+    // Use session user id for booking
+    if (!isset($_SESSION['user_id'])) {
+        $booking_message = 'You must be logged in to book a facility.';
     } else {
-        // Check for double booking and capacity
-        $stmt = $conn->prepare("SELECT COUNT(*) as cnt, f.capacity FROM bookings b JOIN facilities f ON b.facility_id=f.facility_id WHERE b.facility_id=? AND b.booking_time=?");
-        $stmt->bind_param('is', $facility_id, $booking_time);
-        $stmt->execute();
-        $stmt->bind_result($cnt, $capacity);
-        $stmt->fetch();
-        $stmt->close();
-        if ($cnt >= $capacity) {
-            $booking_message = 'This slot is fully booked.';
+        $player_id = $_SESSION['user_id'];
+        // Check if facility is under maintenance
+        if (isset($maintenance[$facility_id])) {
+            $booking_message = 'This facility is under maintenance and cannot be booked.';
         } else {
-            $stmt = $conn->prepare("INSERT INTO bookings (player_id, facility_id, booking_time, duration_minutes) VALUES (?, ?, ?, ?)");
-            $stmt->bind_param('iisi', $player_id, $facility_id, $booking_time, $duration);
-            if ($stmt->execute()) {
-                $booking_message = 'Booking successful!';
-            } else {
-                $booking_message = 'Booking failed: ' . $stmt->error;
-            }
+            // Check for double booking and capacity
+            // Get facility capacity
+            $stmt = $conn->prepare("SELECT capacity FROM facilities WHERE facility_id=?");
+            $stmt->bind_param('i', $facility_id);
+            $stmt->execute();
+            $stmt->bind_result($capacity);
+            $stmt->fetch();
             $stmt->close();
+            // Count bookings for this slot
+            $stmt = $conn->prepare("SELECT COUNT(*) FROM bookings WHERE facility_id=? AND booking_time=?");
+            $stmt->bind_param('is', $facility_id, $booking_time);
+            $stmt->execute();
+            $stmt->bind_result($cnt);
+            $stmt->fetch();
+            $stmt->close();
+            // Prevent double booking by the same user
+            $stmt = $conn->prepare("SELECT COUNT(*) FROM bookings WHERE player_id=? AND facility_id=? AND booking_time=?");
+            $stmt->bind_param('iis', $player_id, $facility_id, $booking_time);
+            $stmt->execute();
+            $stmt->bind_result($user_cnt);
+            $stmt->fetch();
+            $stmt->close();
+            if ($user_cnt > 0) {
+                $booking_message = 'You have already booked this slot.';
+            } elseif ($cnt >= $capacity) {
+                $booking_message = 'This slot is fully booked.';
+            } else {
+                $stmt = $conn->prepare("INSERT INTO bookings (player_id, facility_id, booking_time, duration_minutes) VALUES (?, ?, ?, ?)");
+                $stmt->bind_param('iisi', $player_id, $facility_id, $booking_time, $duration);
+                if ($stmt->execute()) {
+                    $booking_message = 'Booking successful!';
+                } else {
+                    $booking_message = 'Booking failed: ' . $stmt->error;
+                }
+                $stmt->close();
+            }
         }
     }
 }
@@ -205,12 +271,19 @@ function updateAvailableSlots() {
         fetch(`?facility_id=${facilityId}&date=${date}`)
             .then(response => response.json())
             .then(slots => {
-                timeSelect.innerHTML = '<option value="">Select time slot</option>';
-                slots.forEach(slot => {
-                    const [hour] = slot.split(':');
-                    const nextHour = parseInt(hour) + 1;
-                    timeSelect.innerHTML += `<option value="${slot}">${slot} - ${nextHour < 10 ? '0' : ''}${nextHour}:00</option>`;
-                });
+                if (slots.length === 0) {
+                    timeSelect.innerHTML = '<option value="">No available slots</option>';
+                } else {
+                    timeSelect.innerHTML = '<option value="">Select time slot</option>';
+                    slots.forEach(slot => {
+                        const [hour] = slot.split(':');
+                        const nextHour = parseInt(hour) + 1;
+                        timeSelect.innerHTML += `<option value="${slot}">${slot} - ${(nextHour < 10 ? '0' : '') + nextHour}:00</option>`;
+                    });
+                }
+            })
+            .catch(() => {
+                timeSelect.innerHTML = '<option value="">Error loading slots</option>';
             });
     } else {
         timeSelect.innerHTML = '<option value="">Select a facility and date</option>';
@@ -219,42 +292,3 @@ function updateAvailableSlots() {
 </script>
 </body>
 </html>
-<?php
-// AJAX endpoint for available time slots
-require_once '../includes/db.php';
-if (isset($_GET['facility_id']) && isset($_GET['date'])) {
-    $facility_id = (int)$_GET['facility_id'];
-    $date = $_GET['date'];
-    // Use the getAvailableTimeSlots function if present, else inline logic
-    $slots = [];
-    for ($h = 6; $h <= 22; $h++) {
-        $slots[] = sprintf('%02d:00', $h);
-    }
-    $stmt = $conn->prepare("SELECT capacity FROM facilities WHERE facility_id=?");
-    $stmt->bind_param('i', $facility_id);
-    $stmt->execute();
-    $stmt->bind_result($capacity);
-    $stmt->fetch();
-    $stmt->close();
-    $stmt = $conn->prepare("SELECT booking_time FROM bookings WHERE facility_id=? AND DATE(booking_time)=?");
-    $stmt->bind_param('is', $facility_id, $date);
-    $stmt->execute();
-    $result = $stmt->get_result();
-    $booked = [];
-    while ($row = $result->fetch_assoc()) {
-        $time = date('H:00', strtotime($row['booking_time']));
-        if (!isset($booked[$time])) $booked[$time] = 0;
-        $booked[$time]++;
-    }
-    $stmt->close();
-    $available = [];
-    foreach ($slots as $slot) {
-        if (!isset($booked[$slot]) || $booked[$slot] < $capacity) {
-            $available[] = $slot;
-        }
-    }
-    header('Content-Type: application/json');
-    echo json_encode($available);
-    exit;
-}
-?>

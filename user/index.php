@@ -47,9 +47,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             <label for="role">Role:</label>
             <select id="role" name="role" required>
                 <option value="">Select role</option>
-                <option value="player">Player</option>
-                <option value="coach">Coach</option>
-                <option value="admin">Admin</option>
+                <option value="member">Member</option>
+                <option value="staff">Staff</option>
             </select>
             <button type="submit">Register</button>
         </form>
