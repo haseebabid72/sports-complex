@@ -108,15 +108,56 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['book_facility'])) {
             if ($user_cnt > 0) {
                 $booking_message = 'You have already booked this slot.';
             } elseif ($cnt >= $capacity) {
-                $booking_message = 'This slot is fully booked.';
+                $booking_message = 'This slot is fully booked. <form method="post" style="display:inline;"><input type="hidden" name="facility_id" value="' . $facility_id . '"><input type="hidden" name="date" value="' . htmlspecialchars($date) . '"><input type="hidden" name="time" value="' . htmlspecialchars($time) . '"><button type="submit" name="waitlist_facility">Join Waitlist</button></form>';
             } else {
                 $stmt = $conn->prepare("INSERT INTO bookings (player_id, facility_id, booking_time, duration_minutes) VALUES (?, ?, ?, ?)");
                 $stmt->bind_param('iisi', $player_id, $facility_id, $booking_time, $duration);
                 if ($stmt->execute()) {
                     $booking_message = 'Booking successful!';
+                    send_booking_notification($player_id, $facility_id, $date, $time);
                 } else {
                     $booking_message = 'Booking failed: ' . $stmt->error;
                 }
+                $stmt->close();
+            }
+        }
+    }
+}
+// Waitlist for fully booked slots
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['waitlist_facility'])) {
+    $facility_id = (int)$_POST['facility_id'];
+    $date = $_POST['date'];
+    $time = $_POST['time'];
+    $user_id = $_SESSION['user_id'] ?? null;
+    if ($user_id && $facility_id && $date && $time) {
+        $stmt = $conn->prepare("INSERT INTO waitlist (facility_id, user_id, date, time, request_time) VALUES (?, ?, ?, ?, NOW())");
+        $stmt->bind_param('iiss', $facility_id, $user_id, $date, $time);
+        $stmt->execute();
+        $stmt->close();
+    }
+}
+// Recurring bookings for regular users
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['recurring_booking'])) {
+    $facility_id = (int)$_POST['facility_id'];
+    $date = $_POST['date'];
+    $time = $_POST['time'];
+    $repeat = (int)$_POST['repeat']; // number of weeks
+    $user_id = $_SESSION['user_id'] ?? null;
+    if ($user_id && $facility_id && $date && $time && $repeat > 0) {
+        for ($i = 0; $i < $repeat; $i++) {
+            $booking_date = date('Y-m-d', strtotime("$date +$i week"));
+            $booking_time = $booking_date . ' ' . $time . ':00';
+            // Check for conflicts as in normal booking
+            $stmt = $conn->prepare("SELECT COUNT(*) FROM bookings WHERE facility_id=? AND booking_time=?");
+            $stmt->bind_param('is', $facility_id, $booking_time);
+            $stmt->execute();
+            $stmt->bind_result($cnt);
+            $stmt->fetch();
+            $stmt->close();
+            if ($cnt == 0) {
+                $stmt = $conn->prepare("INSERT INTO bookings (player_id, facility_id, booking_time, duration_minutes) VALUES (?, ?, ?, 60)");
+                $stmt->bind_param('iisi', $user_id, $facility_id, $booking_time, $duration = 60);
+                $stmt->execute();
                 $stmt->close();
             }
         }
@@ -164,6 +205,12 @@ function getAvailableTimeSlots($conn, $facility_id, $date) {
     }
     return $available;
 }
+// Send booking confirmation notification (placeholder for email/SMS)
+function send_booking_notification($user_id, $facility_id, $date, $time) {
+    // In a real system, fetch user email/phone and send notification
+    // For now, just log the action
+    log_action($user_id, 'booking_notification', "Facility: $facility_id, Date: $date, Time: $time");
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -171,6 +218,8 @@ function getAvailableTimeSlots($conn, $facility_id, $date) {
     <meta charset="UTF-8">
     <title>Facility Booking Timetable</title>
     <link rel="stylesheet" href="../assets/css/style.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css">
     <style>
         .calendar-table { width: 100%; border-collapse: collapse; margin-top: 24px; }
         .calendar-table th, .calendar-table td { border: 1px solid #ccc; padding: 6px; text-align: center; }
@@ -182,14 +231,14 @@ function getAvailableTimeSlots($conn, $facility_id, $date) {
         .booking-form select, .booking-form input { width: 100%; padding: 8px; margin-top: 4px; }
     </style>
 </head>
-<body>
+<body class="bg-light">
 <?php include __DIR__ . '/../includes/navbar.php'; ?>
 <div class="registration-container">
     <h2>Facility Timetable</h2>
     <?php if (!empty($booking_message)): ?>
         <div class="message"><?php echo htmlspecialchars($booking_message); ?></div>
     <?php endif; ?>
-    <form method="post" id="bookingForm">
+    <form method="post" id="bookingForm" class="card p-4 shadow-sm border-0 mb-4">
         <label for="facility_id">Facility</label>
         <select name="facility_id" id="facility_id" required>
             <option value="">Select facility</option>
@@ -209,11 +258,30 @@ function getAvailableTimeSlots($conn, $facility_id, $date) {
         <select name="time" id="time" required>
             <option value="">Select a facility and date</option>
         </select>
-        <button type="submit" name="book_facility">Book</button>
+        <button type="submit" name="book_facility" class="btn btn-primary w-100">Book</button>
+    </form>
+    <form method="post" id="recurringBookingForm" style="margin-top:24px;">
+        <h3>Recurring Booking</h3>
+        <label for="facility_id_rec">Facility</label>
+        <select name="facility_id" id="facility_id_rec" required>
+            <option value="">Select facility</option>
+            <?php $facilities->data_seek(0); while ($f = $facilities->fetch_assoc()): ?>
+                <option value="<?php echo $f['facility_id']; ?>"><?php echo htmlspecialchars($f['name'] . ' (' . $f['type'] . ')'); ?></option>
+            <?php endwhile; ?>
+        </select>
+        <label for="date_rec">Start Date</label>
+        <input type="date" name="date" id="date_rec" min="<?php echo date('Y-m-d'); ?>" required>
+        <label for="time_rec">Time Slot</label>
+        <select name="time" id="time_rec" required>
+            <option value="">Select a facility and date</option>
+        </select>
+        <label for="repeat">Repeat for (weeks)</label>
+        <input type="number" name="repeat" id="repeat" min="1" max="12" value="4" required>
+        <button type="submit" name="recurring_booking" class="btn btn-primary w-100">Book Recurring</button>
     </form>
     <div style="margin-top:24px;">
         <h3>Maintenance Schedule</h3>
-        <table class="calendar-table">
+        <table class="calendar-table table table-striped table-hover mt-4">
             <tr><th>Facility</th><th>Status</th><th>Maintenance Start</th><th>Maintenance End</th></tr>
             <?php foreach ($maintenance as $m): ?>
                 <tr>
@@ -226,7 +294,7 @@ function getAvailableTimeSlots($conn, $facility_id, $date) {
         </table>
     </div>
     <div id="calendar"></div>
-    <a href="../index.php">Back</a>
+    <a href="../index.php" class="btn btn-secondary mt-3">Back</a>
 </div>
 <script>
 const facilities = <?php echo json_encode(iterator_to_array($facilities)); ?>;

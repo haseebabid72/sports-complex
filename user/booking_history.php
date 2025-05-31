@@ -24,17 +24,20 @@ $result = $stmt->get_result();
     <meta charset="UTF-8">
     <title>My Booking History</title>
     <link rel="stylesheet" href="../assets/css/style.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css">
     <style>
         table { width: 100%; border-collapse: collapse; margin-top: 24px; }
         th, td { border: 1px solid #ccc; padding: 8px; text-align: center; }
         th { background: #f4f4f4; }
     </style>
 </head>
-<body>
+<body class="bg-light">
 <?php include __DIR__ . '/../includes/navbar.php'; ?>
-<div class="registration-container">
-    <h2>My Booking History</h2>
-    <table>
+<div class="container my-5">
+    <h2 class="text-center mb-4">My Booking History</h2>
+    <table class="table table-striped table-hover mt-4">
+        <thead>
         <tr>
             <th>Date</th>
             <th>Time</th>
@@ -43,6 +46,8 @@ $result = $stmt->get_result();
             <th>Facility Type</th>
             <th>Equipment Used</th>
         </tr>
+        </thead>
+        <tbody>
         <?php while ($row = $result->fetch_assoc()):
             $dt = new DateTime($row['booking_time']); ?>
         <tr>
@@ -54,8 +59,9 @@ $result = $stmt->get_result();
             <td><?php echo $row['equipment'] ? htmlspecialchars($row['equipment']) : '-'; ?></td>
         </tr>
         <?php endwhile; ?>
+        </tbody>
     </table>
-    <a href="member_dashboard.php">Back to Dashboard</a>
+    <a href="member_dashboard.php" class="btn btn-secondary mt-3">Back to Dashboard</a>
 </div>
 </body>
 </html>

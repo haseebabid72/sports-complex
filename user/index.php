@@ -29,29 +29,56 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>User Registration</title>
     <link rel="stylesheet" href="../assets/css/style.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css">
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
 </head>
-<body>
+<body class="bg-light">
     <?php include __DIR__ . '/../includes/navbar.php'; ?>
-    <div class="registration-container">
-        <h2>Register</h2>
-        <?php if ($message): ?>
-            <div class="message"><?php echo htmlspecialchars($message); ?></div>
-        <?php endif; ?>
-        <form id="registrationForm" method="post" autocomplete="off">
-            <label for="name">Name:</label>
-            <input type="text" id="name" name="name" required>
-            <label for="email">Email:</label>
-            <input type="email" id="email" name="email" required>
-            <label for="password">Password:</label>
-            <input type="password" id="password" name="password" required minlength="6">
-            <label for="role">Role:</label>
-            <select id="role" name="role" required>
-                <option value="">Select role</option>
-                <option value="member">Member</option>
-                <option value="staff">Staff</option>
-            </select>
-            <button type="submit">Register</button>
-        </form>
+    <div class="container">
+        <div class="row justify-content-center">
+            <div class="col-md-6">
+                <div class="card p-4 shadow-sm border-0">
+                    <h2 class="text-center mb-4">Register</h2>
+                    <?php if ($message): ?>
+                        <div class="alert alert-info"><?php echo htmlspecialchars($message); ?></div>
+                    <?php endif; ?>
+                    <form id="registrationForm" method="post" autocomplete="off">
+                        <div class="mb-3">
+                            <label for="name" class="form-label">Name:</label>
+                            <input type="text" id="name" name="name" class="form-control" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="email" class="form-label">Email:</label>
+                            <input type="email" id="email" name="email" class="form-control" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="password" class="form-label">Password:</label>
+                            <input type="password" id="password" name="password" class="form-control" required minlength="6">
+                        </div>
+                        <div class="mb-3">
+                            <label for="role" class="form-label">Role:</label>
+                            <select id="role" name="role" class="form-select" required>
+                                <option value="">Select role</option>
+                                <option value="member">Member</option>
+                                <option value="staff">Staff</option>
+                            </select>
+                        </div>
+                        <button type="submit" class="btn btn-primary w-100">Register</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="hero-header position-relative mb-4">
+        <div class="d-flex align-items-center">
+            <i class="bi bi-speedometer2 me-3" style="font-size:2.8rem;"></i>
+            <div>
+                <h1 class="mb-1" style="font-weight:700; letter-spacing:1px;">Dashboard</h1>
+                <p class="mb-0" style="font-size:1.2rem; opacity:0.95;">Welcome to your sports complex dashboard. Quick access to bookings, equipment, and reports.</p>
+            </div>
+        </div>
+        <i class="bi bi-graph-up"></i>
     </div>
     <script src="../assets/js/script.js"></script>
 </body>
